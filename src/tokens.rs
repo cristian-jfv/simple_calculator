@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TokenKind {
     Plus,
     Minus,
@@ -26,7 +26,7 @@ impl fmt::Display for TokenKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub value: f64,
@@ -35,18 +35,55 @@ pub struct Token {
 #[derive(Debug)]
 pub struct Tokenizer {
     tokens: VecDeque<Token>,
+    verbose: bool,
 }
 
 impl Tokenizer {
     // Constructor
-    pub fn new(input: String) -> Tokenizer {
+    pub fn new(input: String, verbose: bool) -> Tokenizer {
         Tokenizer {
             tokens: Self::parse_tokens(input),
+            verbose: verbose,
         }
     }
 
+    fn print_token(t: &Token) {
+        match t.kind {
+            TokenKind::Number => print!(" {} ", t.value),
+            _ => print!(" {} ", t.kind),
+        }
+    }
+
+    fn print_tokens(&self) {
+        if self.verbose && self.tokens.is_empty() {
+            println!(" token list is empty");
+            return;
+        }
+        for t in &self.tokens {
+            Self::print_token(t);
+        }
+        println!("");
+    }
+
     pub fn get_token(&mut self) -> Option<Token> {
-        return self.tokens.pop_front();
+        let t = self.tokens.pop_front();
+        /*if t.is_none() { 
+            println!("token list is empty");
+            return t;
+        }
+        print!("popping [");
+        Self::print_token(&t.clone().unwrap());
+        print!("]");
+        Self::print_tokens(self);*/
+        return t;
+    }
+
+    pub fn put_back(&mut self, token: Token) {
+        /*print!("returning [");
+        Self::print_token(&token);
+        print!("]");
+        Self::print_tokens(self);*/
+        self.tokens.push_front(token);
     }
 
     fn parse_tokens(input: String) -> VecDeque<Token> {

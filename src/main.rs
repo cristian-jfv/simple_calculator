@@ -1,5 +1,7 @@
+mod parser;
 mod tokens;
 
+use crate::parser::expression;
 use crate::tokens::Tokenizer;
 use std::io::{self, Write};
 
@@ -17,6 +19,10 @@ fn read_user_input() -> String {
     return input;
 }
 
+fn print_result(result: f64) {
+    println!("= {result}");
+}
+
 fn main() {
     loop {
         print_prompt();
@@ -27,19 +33,20 @@ fn main() {
             break;
         }
 
-        let mut tzr = Tokenizer::new(input);
+        let mut tzr = Tokenizer::new(input, true);
 
-//        loop {
-//            let token = tzr.get_token();
-//            if token.is_none() {
-//                break;
-//            }
-//            let token = token.unwrap();
-//            println!("kind {}, value: {}", token.kind, token.value);
-//        }
+        let result = expression(&mut tzr);
+        print_result(result);
 
+        //        loop {
+        //            let token = tzr.get_token();
+        //            if token.is_none() {
+        //                break;
+        //            }
+        //            let token = token.unwrap();
+        //            println!("kind {}, value: {}", token.kind, token.value);
+        //        }
     }
 
     println!("");
-
 }
