@@ -41,10 +41,13 @@ pub struct Tokenizer {
 impl Tokenizer {
     // Constructor
     pub fn new(input: String, verbose: bool) -> Tokenizer {
-        Tokenizer {
+        let t = Tokenizer {
             tokens: Self::parse_tokens(input),
             verbose: verbose,
-        }
+        };
+
+        t.print_tokens();
+        return t;
     }
 
     fn print_token(t: &Token) {
@@ -67,7 +70,7 @@ impl Tokenizer {
 
     pub fn get_token(&mut self) -> Option<Token> {
         let t = self.tokens.pop_front();
-        /*if t.is_none() { 
+        /*if t.is_none() {
             println!("token list is empty");
             return t;
         }
@@ -90,6 +93,7 @@ impl Tokenizer {
         let mut token_vec: VecDeque<Token> = VecDeque::new();
         //let end = input.chars().count();
         let mut i = 0;
+        let input = input.trim().to_string();
 
         // Isolate tokens, do not try to apply the grammar
         loop {
@@ -138,7 +142,11 @@ impl Tokenizer {
                         }
                     }
                 }
-                _ => {}
+                Some(c) => {
+                    println!("{}^", " ".repeat(i + 2));
+                    eprintln!("Invalid character: '{c}'");
+                    break;
+                }
             }
 
             i += 1;

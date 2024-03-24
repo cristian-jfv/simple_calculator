@@ -3,7 +3,11 @@ mod tokens;
 
 use crate::parser::expression;
 use crate::tokens::Tokenizer;
-use std::io::{self, Write};
+use std::{
+    fmt::format,
+    io::{self, Write},
+    ops::Rem,
+};
 
 fn print_prompt() {
     println!("");
@@ -20,7 +24,15 @@ fn read_user_input() -> String {
 }
 
 fn print_result(result: f64) {
-    println!("= {result}");
+    let order = result.log10();
+    let prompt = "= ";
+    let output;
+    if order.abs() < 4.0 || result.rem(1.0) == 0.0 {
+        output = format!("{result}");
+    } else {
+        output = format!("{result:.5e}");
+    }
+    println!("{prompt}{output}")
 }
 
 fn main() {
