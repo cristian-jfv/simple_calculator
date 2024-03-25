@@ -1,10 +1,12 @@
+mod charstream;
+mod errors;
 mod parser;
 mod tokens;
 
+//use crate::tokens::Tokenizer;
 use crate::parser::expression;
-use crate::tokens::Tokenizer;
+use crate::tokens::TokenStream;
 use std::{
-    fmt::format,
     io::{self, Write},
     ops::Rem,
 };
@@ -38,17 +40,24 @@ fn print_result(result: f64) {
 fn main() {
     loop {
         print_prompt();
-        let input = read_user_input();
+        let input = read_user_input().trim().to_string();
 
         // Temporary graceful exit
-        if input.trim() == "q".to_string() {
+        if input == "q".to_string() {
             break;
         }
 
-        let mut tzr = Tokenizer::new(input, true);
+        let mut ts = match TokenStream::new(input) {
+            Some(v) => v,
+            None => continue,
+        };
 
-        let result = expression(&mut tzr);
-        print_result(result);
+        match expression(&mut ts) {
+            Ok(ans) => print_result(ans),
+            Err(e) => {
+                println!("{e}")
+            }
+        }
 
         //        loop {
         //            let token = tzr.get_token();

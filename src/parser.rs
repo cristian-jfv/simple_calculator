@@ -13,121 +13,152 @@
 //  "(" Expression ")" : grouping
 // Number:
 //  floating-point-literal
-
-use crate::tokens::{TokenKind, Tokenizer};
+use crate::errors::{ParserError, ParserResult};
+use crate::tokens::{TokenKind, TokenStream};
 
 const VERBOSE: bool = false;
 
-fn log(message: &str) {
-    if !VERBOSE {
-        return;
+fn log(message: String) {
+    if VERBOSE {
+        println!("{}", message);
     }
-    println!("{}", message.to_string());
 }
 
 // Deal with + and -
-pub fn expression(tzr: &mut Tokenizer) -> f64 {
-    log("entering expression");
-    let mut left = term(tzr); // read and evaluate a term
-    let mut t = tzr.get_token(); // get the next token
+pub fn expression(ts: &mut TokenStream) -> ParserResult<f64> {
+    log("entering expression".to_string());
+    let mut left = term(ts)?;
 
     loop {
-        if t.is_none() {
-            break;
-        }
-        match t.clone().unwrap().kind {
+        log("expression at the start of the loop".to_string());
+        let t = ts.get_token()?;
+        log("expression gets a valid token inside loop".to_string());
+        let t = match t {
+            Some(v) => v,
+            None => break,
+        };
+        match t.kind {
             TokenKind::Plus => {
-                log("expression finds a sum");
-                left += term(tzr);
-                t = tzr.get_token();
+                log("expression finds a sum".to_string());
+                let right = term(ts)?;
+                left += right;
             }
             TokenKind::Minus => {
-                log("expression finds a substraction");
-                left -= term(tzr);
-                t = tzr.get_token();
+                log("expression finds a substraction".to_string());
+                let right = term(ts)?;
+                left -= right;
             }
             _ => {
-                log("expression finds no match");
-                tzr.put_back(t.unwrap());
+                log("expression finds no match".to_string());
+                ts.putback(t);
                 break;
             }
         }
     }
-    log("expression returns {left}");
-    return left;
+    log(format!("expression returns {left}"));
+    return Ok(left);
 }
 
 // Deal with *, /, and %
-pub fn term(tzr: &mut Tokenizer) -> f64 {
-    log("entering term");
-    let mut left = primary(tzr);
-    let mut t = tzr.get_token();
+pub fn term(ts: &mut TokenStream) -> ParserResult<f64> {
+    log("entering term".to_string());
+    let mut left = primary(ts)?;
     loop {
-        if t.is_none() {
-            break;
-        }
-
-        match t.clone().unwrap().kind {
+        log("term at the start of the loop".to_string());
+        let t = ts.get_token()?;
+        log("term gets a valid token".to_string());
+        let t = match t {
+            Some(v) => v,
+            None => break,
+        };
+        log(format!(
+            "term: token.kind={}; token.value={}",
+            t.kind, t.value
+        ));
+        match t.kind {
             TokenKind::Times => {
-                log("term finds a multiplication");
-                left *= primary(tzr);
-                t = tzr.get_token();
+                log("term finds a multiplication".to_string());
+                let right = primary(ts)?;
+                log(format!("term: primary returns {}", right));
+                left *= right;
             }
             TokenKind::Divide => {
-                log("term finds a division");
-                let d = primary(tzr);
+                log("term finds a division".to_string());
+                let d = primary(ts)?;
                 if d == 0.0 {
                     eprintln!("Found division by zero");
-                    break; //process::exit(1);
+                    break;
                 }
                 left /= d;
-                t = tzr.get_token();
             }
             _ => {
-                log("no match at term");
-                tzr.put_back(t.clone().unwrap());
+                log("term finds no match".to_string());
+                ts.putback(t);
                 break;
             }
         }
     }
-    log("term returns {left}");
-    return left;
+    log(format!("term returns {left}"));
+    return Ok(left);
 }
 
 // Deal with numbers and parentheses
-pub fn primary(tzr: &mut Tokenizer) -> f64 {
-    log("entering primary");
-    let t = tzr.get_token();
-    if t.is_none() {
-        return 0.0;
-    }
-    let t = t.unwrap();
+pub fn primary(ts: &mut TokenStream) -> ParserResult<f64> {
+    log("entering primary".to_string());
 
+    let t = ts.get_token()?;
+    let t = match t {
+        Some(v) => v,
+        None => {
+            return Err(ParserError::new(
+                ts.current_pos(),
+                "Expected token".to_string(),
+            ));
+        }
+    };
+    log(format!(
+        "primary: token.kind={}; token.value={}",
+        t.kind, t.value
+    ));
     match t.kind {
         TokenKind::OpenParenthesis => {
-            log("primary finds an opening parenthesis");
-            let d = expression(tzr);
-            let t = tzr.get_token();
+            log("primary finds an opening parenthesis".to_string());
+            let d = expression(ts)?;
+            let t = ts.get_token()?;
+            let t = match t {
+                Some(v) => v,
+                None => {
+                    return Err(ParserError::new(
+                        ts.current_pos(),
+                        "Expected token".to_string(),
+                    ));
+                }
+            };
 
-            match t.unwrap().kind {
+            match t.kind {
                 TokenKind::CloseParenthesis => {
-                    log("primary finds a closing parenthesis");
-                    return d;
-                },
+                    log("primary finds a closing parenthesis".to_string());
+                    return Ok(d);
+                }
                 _ => {
-                    eprintln!("primary expected ')'");
-                    return 0.0;
+                    return Err(ParserError::new(
+                        ts.current_pos(),
+                        "Expected ')'".to_string(),
+                    ));
                 }
             }
         }
         TokenKind::Number => {
-            log("primary finds a number");
+            log("primary finds a number".to_string());
             //println!("primary returns {}", t.value);
-            return t.value;
+            return Ok(t.value);
         }
         _ => {
-            eprintln!("primary expected");
-            return 0.0;
+            //eprintln!("primary expected");
+            return Err(ParserError::new(
+                ts.current_pos(),
+                "Primary expected".to_string(),
+            ));
         }
     }
 }

@@ -1,6 +1,9 @@
 use std::collections::VecDeque;
 use std::fmt;
 
+use crate::charstream::CharStream;
+use crate::errors::{ParserError, ParserResult};
+
 #[derive(Debug, Clone)]
 pub enum TokenKind {
     Plus,
@@ -32,149 +35,140 @@ pub struct Token {
     pub value: f64,
 }
 
-#[derive(Debug)]
-pub struct Tokenizer {
-    tokens: VecDeque<Token>,
-    verbose: bool,
+pub struct TokenStream {
+    cs: CharStream,
+    reserve_tokens: VecDeque<Token>,
 }
 
-impl Tokenizer {
-    // Constructor
-    pub fn new(input: String, verbose: bool) -> Tokenizer {
-        let t = Tokenizer {
-            tokens: Self::parse_tokens(input),
-            verbose: verbose,
+impl TokenStream {
+    pub fn new(input: String) -> Option<TokenStream> {
+        let cs = match CharStream::new(input) {
+            Ok(v) => v,
+            Err(_) => {
+                return None;
+            }
         };
-
-        t.print_tokens();
-        return t;
+        Some(TokenStream {
+            cs,
+            reserve_tokens: VecDeque::new(),
+        })
     }
 
-    fn print_token(t: &Token) {
-        match t.kind {
-            TokenKind::Number => print!(" {} ", t.value),
-            _ => print!(" {} ", t.kind),
+    pub fn current_pos(&self) -> usize {
+        return self.cs.current_pos();
+    }
+
+    pub fn get_token(&mut self) -> ParserResult<Option<Token>> {
+        if self.reserve_tokens.is_empty() {
+            //println!("token reserve empty, read new token");
+            return Self::read_token(self);
+        } else {
+            match self.reserve_tokens.pop_back() {
+                Some(t) => {
+                    return Ok(Some(t));
+                }
+                None => {
+                    return Err(ParserError::new(
+                        self.cs.current_pos(),
+                        "No tokens left to get".to_string(),
+                    ))
+                }
+            }
         }
     }
 
-    fn print_tokens(&self) {
-        if self.verbose && self.tokens.is_empty() {
-            println!(" token list is empty");
-            return;
-        }
-        for t in &self.tokens {
-            Self::print_token(t);
-        }
-        println!("");
+    pub fn putback(&mut self, t: Token) {
+        self.reserve_tokens.push_back(t.clone());
     }
 
-    pub fn get_token(&mut self) -> Option<Token> {
-        let t = self.tokens.pop_front();
-        /*if t.is_none() {
-            println!("token list is empty");
-            return t;
-        }
-        print!("popping [");
-        Self::print_token(&t.clone().unwrap());
-        print!("]");
-        Self::print_tokens(self);*/
-        return t;
-    }
-
-    pub fn put_back(&mut self, token: Token) {
-        /*print!("returning [");
-        Self::print_token(&token);
-        print!("]");
-        Self::print_tokens(self);*/
-        self.tokens.push_front(token);
-    }
-
-    fn parse_tokens(input: String) -> VecDeque<Token> {
-        let mut token_vec: VecDeque<Token> = VecDeque::new();
-        //let end = input.chars().count();
-        let mut i = 0;
-        let input = input.trim().to_string();
-
-        // Isolate tokens, do not try to apply the grammar
+    fn read_token(&mut self) -> ParserResult<Option<Token>> {
         loop {
-            let c = input.chars().nth(i);
-            match c {
-                None => break,
-                Some(' ') => {}
-                Some('+') => token_vec.push_back(Token {
-                    kind: TokenKind::Plus,
-                    value: 0.0,
-                }),
-                Some('-') => token_vec.push_back(Token {
-                    kind: TokenKind::Minus,
-                    value: 0.0,
-                }),
-                Some('*') => token_vec.push_back(Token {
-                    kind: TokenKind::Times,
-                    value: 0.0,
-                }),
-                Some('/') => token_vec.push_back(Token {
-                    kind: TokenKind::Divide,
-                    value: 0.0,
-                }),
-                Some('(') => token_vec.push_back(Token {
-                    kind: TokenKind::OpenParenthesis,
-                    value: 0.0,
-                }),
-                Some(')') => token_vec.push_back(Token {
-                    kind: TokenKind::CloseParenthesis,
-                    value: 0.0,
-                }),
+            let ch = self.cs.next_char();
+            match ch {
+                None => {
+                    return Ok(None); //Err(ParserError::new(self.cs.current_pos(), "".to_string()));
+                }
+                Some(' ') => continue, // Ignore whitespaces
+                Some('+') => {
+                    return Ok(Some(Token {
+                        kind: TokenKind::Plus,
+                        value: 0.0,
+                    }))
+                }
+                Some('-') => {
+                    return Ok(Some(Token {
+                        kind: TokenKind::Minus,
+                        value: 0.0,
+                    }))
+                }
+                Some('*') => {
+                    return Ok(Some(Token {
+                        kind: TokenKind::Times,
+                        value: 0.0,
+                    }))
+                }
+                Some('/') => {
+                    return Ok(Some(Token {
+                        kind: TokenKind::Divide,
+                        value: 0.0,
+                    }))
+                }
+                Some('(') => {
+                    return Ok(Some(Token {
+                        kind: TokenKind::OpenParenthesis,
+                        value: 0.0,
+                    }))
+                }
+                Some(')') => {
+                    return Ok(Some(Token {
+                        kind: TokenKind::CloseParenthesis,
+                        value: 0.0,
+                    }))
+                }
                 Some(d) if d.is_numeric() => {
                     // Handle numerical tokens
-                    let (new_index, number) = Self::handle_numeric_tokens(&input, i);
-                    match number {
-                        Some(d) => {
-                            i = new_index;
-                            token_vec.push_back(Token {
-                                kind: TokenKind::Number,
-                                value: d,
-                            });
-                        }
-                        None => {
-                            eprintln!("error while parsing number");
-                            break;
-                        }
-                    }
+                    self.cs.putback();
+                    let number = Self::handle_numeric_tokens(&mut self.cs)?;
+                    return Ok(Some(Token {
+                        kind: TokenKind::Number,
+                        value: number,
+                    }));
                 }
                 Some(c) => {
-                    println!("{}^", " ".repeat(i + 2));
-                    eprintln!("Invalid character: '{c}'");
-                    break;
+                    return Err(ParserError::new(
+                        self.cs.current_pos() + 1,
+                        format!("Invalid character {}", c),
+                    ));
                 }
             }
-
-            i += 1;
         }
-
-        return token_vec;
     }
-
-    fn handle_numeric_tokens(input: &String, mut index: usize) -> (usize, Option<f64>) {
+    fn handle_numeric_tokens(cs: &mut CharStream) -> ParserResult<f64> {
         let mut number_str = String::new();
-        // Read
-        while let Some(chr) = input.chars().nth(index) {
-            if chr.is_numeric() || chr == '.' || chr == 'e' {
-                number_str.push(chr);
-                index += 1;
-            } else if chr == '-' && input.chars().nth(index - 1) == Some('e') {
-                // Check previous character, it should be 'e'
-                number_str.push(chr);
-                index += 1;
-            } else {
-                break;
+        // Read until end of number or end of string
+        loop {
+            match cs.next_char() {
+                Some(c) => {
+                    if c.is_numeric() || c == '.' || c == 'e' {
+                        number_str.push(c)
+                    } else if c == '-' && number_str.chars().nth_back(0) == Some('e') {
+                        number_str.push(c)
+                    } else {
+                        cs.putback();
+                        break;
+                    }
+                }
+                None => break,
             }
         }
-        // Parse
-        if let Ok(number) = number_str.parse::<f64>() {
-            return (index - 1, Some(number));
-        } else {
-            return (index - 1, None);
+
+        // Try to parse the characters into a number
+        match number_str.parse::<f64>() {
+            Ok(number) => Ok(number),
+            Err(_) => Err(ParserError::new(
+                cs.current_pos(),
+                "Error while reading number".to_string(),
+            )),
         }
     }
 }
